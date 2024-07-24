@@ -1,0 +1,119 @@
+import pandas as pd
+import numpy as np
+import statsmodels.api as sm
+from scipy import stats
+
+# Load data from GitHub
+# Replace 'your_github_url' with the actual URL to the .dta file in the GitHub repository
+data_url = 'your_github_url'
+df = pd.read_stata(data_url)
+
+# Create the variable 'y'
+df['y'] = df['D'] * df['yd1'] + (1 - df['D']) * df['yd0']
+df['D'] = df['D'].astype('category')
+df['D'].cat.rename_categories({0: "Control", 1: "Tratados"}, inplace=True)
+
+# Summary statistics
+print(df['D'].value_counts())
+print(df['y'].describe())
+
+# Summary statistics by group
+grouped = df.groupby('D')
+print(grouped['y'].describe())
+
+# t-test by group
+t_test_result = stats.ttest_ind(df['y'][df['D'] == "Control"], df['y'][df['D'] == "Tratados"], equal_var=False)
+print(t_test_result)
+
+# Regression analysis
+X = sm.add_constant(df['D'].cat.codes)  # Convert categorical to numerical
+model = sm.OLS(df['y'], X).fit(cov_type='HC3')  # Using robust standard errors
+print(model.summary())
+
+# Estimators
+df['tau'] = df['yd1'] - df['yd0']
+ATE = df['tau'].mean()
+print(f"ATE = {ATE}")
+
+ATT = df[df['D'] == "Tratados"]['tau'].mean()
+print(f"ATT = {ATT}")
+
+ATU = df[df['D'] == "Control"]['tau'].mean()
+print(f"ATU = {ATU}")
+
+ybar_1 = df[df['D'] == "Tratados"]['y'].mean()
+ybar_0 = df[df['D'] == "Control"]['y'].mean()
+NAIVE = ybar_1 - ybar_0
+print(f"Naive = {NAIVE}")
+print(f"Selection Bias = {NAIVE - ATT}")
+
+# Increase the sample size
+df_expanded = df.loc[df.index.repeat(10000)].reset_index(drop=True)
+df_expanded['y'] = df_expanded['D'] * df_expanded['yd1'] + (1 - df_expanded['D']) * df_expanded['yd0']
+
+# Summary statistics after expanding
+grouped_exp = df_expanded.groupby('D')
+print(grouped_exp['y'].describe())
+
+# t-test and regression after expanding
+t_test_result_exp = stats.ttest_ind(df_expanded['y'][df_expanded['D'] == "Control"], df_expanded['y'][df_expanded['D'] == "Tratados"], equal_var=False)
+print(t_test_result_exp)
+
+X_exp = sm.add_constant(df_expanded['D'].cat.codes)
+model_exp = sm.OLS(df_expanded['y'], X_exp).fit()
+print(model_exp.summary())
+
+# Recalculate estimators after expanding
+df_expanded['tau'] = df_expanded['yd1'] - df_expanded['yd0']
+ATE_exp = df_expanded['tau'].mean()
+print(f"ATE after expanding = {ATE_exp}")
+
+ATT_exp = df_expanded[df_expanded['D'] == "Tratados"]['tau'].mean()
+print(f"ATT after expanding = {ATT_exp}")
+
+ATU_exp = df_expanded[df_expanded['D'] == "Control"]['tau'].mean()
+print(f"ATU after expanding = {ATU_exp}")
+
+ybar_1_exp = df_expanded[df_expanded['D'] == "Tratados"]['y'].mean()
+ybar_0_exp = df_expanded[df_expanded['D'] == "Control"]['y'].mean()
+NAIVE_exp = ybar_1_exp - ybar_0_exp
+print(f"Naive after expanding = {NAIVE_exp}")
+print(f"Selection Bias after expanding = {NAIVE_exp - ATT_exp}")
+
+# Random assignment
+np.random.seed(546535087)
+df['D'] = np.random.uniform(size=len(df)) > 0.5
+df['D'] = df['D'].astype('category')
+df['y'] = df['D'] * df['yd1'] + (1 - df['D']) * df['yd0']
+
+# Estimators after random assignment
+ATE_rand = df['tau'].mean()
+print(f"ATE with random assignment = {ATE_rand}")
+
+ATT_rand = df[df['D'] == 1]['tau'].mean()
+print(f"ATT with random assignment = {ATT_rand}")
+
+ATU_rand = df[df['D'] == 0]['tau'].mean()
+print(f"ATU with random assignment = {ATU_rand}")
+
+ybar_1_rand = df[df['D'] == 1]['y'].mean()
+ybar_0_rand = df[df['D'] == 0]['y'].mean()
+NAIVE_rand = ybar_1_rand - ybar_0_rand
+print(f"Naive with random assignment = {NAIVE_rand}")
+print(f"Selection Bias with random assignment = {NAIVE_rand - ATT_rand}")
+
+# Define a function for estimators
+def calculate_estimators(df, tau_col='tau', y_col='y', d_col='D'):
+    print("This program calculates ATE/ATT/ATU/NAIVE estimators.")
+    ATE = df[tau_col].mean()
+    print(f"ATE = {ATE}")
+    ATT = df[df[d_col] == 1][tau_col].mean()
+    print(f"ATT = {ATT}")
+    ATU = df[df[d_col] == 0][tau_col].mean()
+    print(f"ATU = {ATU}")
+    ybar_1 = df[df[d_col] == 1][y_col].mean()
+    ybar_0 = df[df[d_col] == 0][y_col].mean()
+    NAIVE = ybar_1 - ybar_0
+    print(f"Naive = {NAIVE}")
+
+calculate_estimators(df)
